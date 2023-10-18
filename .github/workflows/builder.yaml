@@ -1,0 +1,45 @@
+name: Build & Push Base Images
+
+on:
+  push:
+    branches:
+      - trunk 
+
+jobs:
+  build-and-push:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v2
+
+      - name: Set up Docker
+        uses: docker/setup-buildx-action@v1
+
+      - name: Build & Publish
+        env:
+          GCR_REGISTRY: gcr.io/hadou-ops-tools
+          DOCKER_BUILDKIT: 1
+        run: |
+          gcloud auth configure-docker $GCR_REGISTRY
+
+          # Build and push images for node and terraform
+          docker buildx create --use
+          docker buildx inspect
+          docker buildx build -f node/Dockerfile -t $GCR_REGISTRY/node:${{ github.sha }} -t $GCR_REGISTRY/node:latest node/
+          docker buildx build -f terraform/Dockerfile -t $GCR_REGISTRY/terraform:${{ github.sha }} -t $GCR_REGISTRY/terraform:latest terraform/
+          docker buildx use default
+
+      - name: Check Compliance
+        env:
+          GCR_REGISTRY: gcr.io/your-project-id
+        run: |
+          # Check Docker image compliance with the hardening manifest
+          docker run -v /var/run/docker.sock:/var/run/docker.sock -v $PWD/hardening_manifest.yml:/hardening_manifest.yml --rm -it docker/docker-bench-security -c /hardening_manifest.yml $GCR_REGISTRY/node:${{ github.sha }}
+
+      - name: Push manifests
+        run: |
+          # Push the manifests to GCR
+          gcloud auth configure-docker $GCR_REGISTRY
+          docker manifest create $GCR_REGISTRY/images:${{ github.sha }} $GCR_REGISTRY/node:${{ github.sha }} $GCR_REGISTRY/terraform:${{ github.sha }}
+          docker manifest push $GCR_REGISTRY/images:${{ github.sha }}

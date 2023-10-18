@@ -1,0 +1,6 @@
+# Ignore everything
+**
+
+# But not newly created archives with Stage2 and Stage3
+!/stage2-x86_64.tar.gz
+!/stage3-x86_64.tar.gz

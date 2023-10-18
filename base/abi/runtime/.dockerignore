@@ -1,0 +1,4 @@
+# Ignore everything
+**
+# Allow only runtime tar.gz
+!runtime.tar.gz
