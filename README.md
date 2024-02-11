@@ -3,7 +3,7 @@
 <br>
 
 # Base Images
-
+[![Build & Push Base Images](https://github.com/hadousoftware/base-images/actions/workflows/builder.yaml/badge.svg)](https://github.com/hadousoftware/base-images/actions/workflows/builder.yaml)
 <br>
 
 Welcome to the `hadou.io` base images repo! Providing a collection of secure and versatile Docker base images designed to serve as a secure and reliable foundation.
