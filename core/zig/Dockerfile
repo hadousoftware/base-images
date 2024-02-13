@@ -1,3 +1,5 @@
+# move to support ARM64
+
 ARG BASE_REGISTRY=registry.access.redhat.com
 ARG BASE_IMAGE=ubi8/ubi-minimal
 ARG BASE_TAG=latest
