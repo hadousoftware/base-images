@@ -8,9 +8,15 @@ LABEL org.opencontainers.image.title="Hadou Node.js base" \
 ENV HOME=/home/hadou \
     NODE_ENV=production
 
+# The upstream Node image bundles npm with vulnerable brace-expansion/undici.
+# npm 12.2.2 includes their upstream fixes; do not patch bundled modules by hand.
+ARG NPM_VERSION=12.2.2
+
 RUN apt-get -o APT::Update::Error-Mode=any update \
     && DEBIAN_FRONTEND=noninteractive apt-get --yes --no-remove --with-new-pkgs upgrade \
     && DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends ca-certificates \
+    && npm install --global --ignore-scripts --no-audit --no-fund "npm@${NPM_VERSION}" \
+    && npm cache clean --force \
     && test -z "$(apt-mark showhold)" \
     && groupadd --gid 10001 hadou \
     && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin hadou \
@@ -21,7 +27,8 @@ RUN apt-get -o APT::Update::Error-Mode=any update \
     && find / -xdev -type f -perm /6000 -exec chmod a-s {} + \
     && apt-get clean \
     && rm -rf /var/lib/apt/lists/* \
-    && node --version
+    && node --version \
+    && npm --version
 
 WORKDIR /app
 USER 10001:10001

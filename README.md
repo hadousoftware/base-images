@@ -5,6 +5,14 @@ services. Images are built for `linux/amd64` and `linux/arm64`, run as
 `10001:10001`, and are published only after restricted-runtime checks and an
 OS-package vulnerability gate pass.
 
+**Validation status (2026-11-10): release blocked.** The native amd64/arm64
+builds and restricted-runtime tests pass for every catalog image, but the first
+full image scan finds blocking vulnerabilities, including Debian packages with
+no fixed version reported after current signed updates. These images are
+previews until the CVE gate passes. See [the validation run](https://github.com/hadousoftware/base-images/actions/runs/42959294677)
+and [current remediation](https://github.com/hadousoftware/base-images/pull/3).
+The remaining package blockers are tracked in [issue #1](https://github.com/hadousoftware/base-images/issues/1).
+
 This repository follows the container controls used by
 [`hadousoftware/linux-foundry`](https://github.com/hadousoftware/linux-foundry):
 immutable upstream digests, current signed package updates, non-root execution,
@@ -40,6 +48,8 @@ ghcr.io/hadousoftware/base-images/terraform:terraform1.17
 The Python 3.12 line is intentional: current Hadou services constrain Python to
 3.12, even though newer Python releases exist. Upgrade and test those services
 before changing the shared runtime line.
+Dependabot keeps Python below 3.13; review migrations alongside service constraints,
+catalog tags, and labels. Digest and supported patch updates remain enabled.
 
 ## Local checks
 
@@ -59,6 +69,13 @@ The scan saves the exact image archive first; HIGH, CRITICAL, UNKNOWN, EOL, and
 scanner-coverage failures block publication. Reports can contain package
 inventory and should be kept private when generated from internal derivatives.
 
+The source scan accepts only LOW `DS-0026` (missing health check) findings for
+the six catalog Dockerfiles and two tool locks listed in `scripts/scan.py`.
+These base and CLI images have no running service. Applications must supply
+their own meaningful health checks. Every accepted finding and its rationale
+is recorded in `gate.json`; raw scan findings remain available. Other
+misconfigurations and all secrets continue to block.
+
 ## Legacy definitions
 
 `base/abi`, `core/packer`, `core/terraform/tfmux`, and `core/zig` are historical and
@@ -73,5 +90,10 @@ Pull requests and pushes run policy tests and native amd64/arm64 builds. A
 manual workflow on `trunk` reruns validation, publishes the exact scanned OCI
 archives to GHCR, creates multi-platform indexes, and attaches provenance and
 SBOM attestations. The `release` environment should require human approval.
+
+`trunk` requires an up-to-date `required-checks` result, including administrator
+merges. Force pushes and branch deletion are disabled. If upstream package
+findings block the gate, retain the failed scan evidence and wait for patched
+inputs; do not bypass protection or publish the failed archives.
 
 See [SECURITY.md](SECURITY.md) for private reporting and support boundaries.

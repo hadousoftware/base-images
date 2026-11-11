@@ -11,9 +11,23 @@ import sys
 ROOT = Path(__file__).resolve().parents[1]
 OS_PROFILES = {'debian13': ('debian', '13')}
 LEGACY_SOURCE_DIRS = ('base/abi', 'core/packer', 'core/terraform/tfmux', 'core/zig')
+HEALTHCHECK_EXEMPT_PATHS = frozenset({
+    'core/base/Dockerfile', 'core/python/Dockerfile', 'core/node/Dockerfile',
+    'core/bun/Dockerfile', 'core/terraform/Dockerfile', 'core/go/Dockerfile',
+    'tools/Dockerfile', 'tools/actionlint.Dockerfile',
+})
+HEALTHCHECK_REASON = 'Base and CLI images have no running service; downstream applications must define their own health checks.'
 
 
-def evaluate(report, os_required=False, profile='debian13'):
+def healthcheck_exception(result, finding, source_policy):
+    return (source_policy and result.get('Type') == 'dockerfile'
+            and result.get('Target') in HEALTHCHECK_EXEMPT_PATHS
+            and finding.get('ID') == 'DS-0026'
+            and finding.get('Severity') == 'LOW'
+            and finding.get('Status') == 'FAIL')
+
+
+def evaluate(report, os_required=False, profile='debian13', source_policy=False, exceptions=None):
     if not isinstance(report, dict) or report.get('SchemaVersion') != 2:
         raise ValueError('Unrecognized or incomplete scanner report')
     results = report.get('Results')
@@ -34,6 +48,11 @@ def evaluate(report, os_required=False, profile='debian13'):
         for category in ('Vulnerabilities', 'Secrets', 'Misconfigurations'):
             for finding in result.get(category) or []:
                 if category == 'Misconfigurations' and finding.get('Status') == 'PASS':
+                    continue
+                if category == 'Misconfigurations' and healthcheck_exception(result, finding, source_policy):
+                    if exceptions is not None:
+                        exceptions.append({'target': result['Target'], 'id': finding['ID'],
+                                           'reason': HEALTHCHECK_REASON})
                     continue
                 if category == 'Secrets' or category == 'Misconfigurations' or finding.get('Severity') in ('HIGH', 'CRITICAL', 'UNKNOWN'):
                     blockers.append({
@@ -92,14 +111,17 @@ def scan(mode, target, output, profile='debian13'):
     report_path = output / 'scan.json'
     subprocess.run(command + [subcommand] + options + ['--format', 'json', '--output', '/reports/scan.json'] + target_args, check=True)
     report = json.loads(report_path.read_text())
-    blockers = evaluate(report, os_required=mode == 'image', profile=profile)
+    exceptions = []
+    blockers = evaluate(report, os_required=mode == 'image', profile=profile,
+                        source_policy=mode == 'source', exceptions=exceptions)
     (output / 'gate.json').write_text(json.dumps({
         'scanner': reference,
         'mode': mode,
         'blockers': blockers,
+        'exceptions': exceptions,
         'os_profile': profile if mode == 'image' else None,
         'legacy_source_exclusions': list(LEGACY_SOURCE_DIRS) if mode == 'source' else [],
-        'policy': 'Fail HIGH, CRITICAL, UNKNOWN vulnerabilities; all secrets and misconfigurations; no unfixed suppression',
+        'policy': 'Fail HIGH, CRITICAL, UNKNOWN vulnerabilities; all secrets and misconfigurations except documented path-scoped DS-0026 base/CLI findings; no unfixed vulnerability suppression',
     }, indent=2) + '\n')
     if mode == 'image':
         sbom_options = [option for option in options if option != '--list-all-pkgs']

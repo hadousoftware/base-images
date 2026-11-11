@@ -45,11 +45,11 @@ class CatalogTests(unittest.TestCase):
         text = {item['name']: (ROOT / item['dockerfile']).read_text() for item in self.catalog}
         self.assertIn('debian:13-slim@sha256:', text['base'])
         self.assertIn('python:3.12-slim-trixie@sha256:', text['python'])
-        self.assertIn('uv:0.13.7@sha256:', text['python'])
+        self.assertRegex(text['python'], r'uv:0\.13\.\d+@sha256:')
         self.assertIn('node:26-trixie-slim@sha256:', text['node'])
-        self.assertIn('bun:1.4.4-debian@sha256:', text['bun'])
-        self.assertIn('terraform:1.17.1@sha256:', text['terraform'])
-        self.assertIn('golang:1.27.3-trixie@sha256:', text['go'])
+        self.assertRegex(text['bun'], r'bun:1\.4\.\d+-debian@sha256:')
+        self.assertRegex(text['terraform'], r'terraform:1\.17\.\d+@sha256:')
+        self.assertRegex(text['go'], r'golang:1\.27\.\d+-trixie@sha256:')
 
     def test_language_toolchains_have_non_root_home(self):
         for image in (item for item in self.catalog if item['name'] != 'base'):

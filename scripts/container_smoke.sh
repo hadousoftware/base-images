@@ -30,7 +30,7 @@ docker run --rm --network none --read-only --cap-drop ALL \
     case "$IMAGE_NAME" in
       base) /bin/sh -c "test -n \"\$(id -u)\"" ;;
       python) python3 --version; uv --version ;;
-      node) node --version ;;
+      node) node --version; npm --version ;;
       bun) bun --version ;;
       terraform) terraform version ;;
       go) go version ;;

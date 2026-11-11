@@ -66,6 +66,25 @@ class ScanTests(unittest.TestCase):
         for directory in scan.LEGACY_SOURCE_DIRS:
             self.assertIn(directory, readme)
 
+    def test_healthcheck_exception_is_source_only_and_auditable(self):
+        item = {'SchemaVersion': 2, 'Results': [{
+            'Type': 'dockerfile', 'Target': 'core/node/Dockerfile',
+            'Misconfigurations': [{'ID': 'DS-0026', 'Severity': 'LOW', 'Status': 'FAIL'}],
+        }]}
+        self.assertEqual(len(scan.evaluate(item)), 1)
+        exceptions = []
+        self.assertEqual(scan.evaluate(item, source_policy=True, exceptions=exceptions), [])
+        self.assertEqual(exceptions, [{'target': 'core/node/Dockerfile', 'id': 'DS-0026',
+                                       'reason': scan.HEALTHCHECK_REASON}])
+        for field, value in [('Target', 'app/Dockerfile'), ('Type', 'terraform')]:
+            changed = {**item, 'Results': [{**item['Results'][0], field: value}]}
+            self.assertEqual(len(scan.evaluate(changed, source_policy=True)), 1)
+        for field, value in [('ID', 'DS-0002'), ('Severity', 'HIGH')]:
+            result = item['Results'][0]
+            changed = {**item, 'Results': [{**result, 'Misconfigurations': [
+                {**result['Misconfigurations'][0], field: value}]}]}
+            self.assertEqual(len(scan.evaluate(changed, source_policy=True)), 1)
+
 
 if __name__ == '__main__':
     unittest.main()

@@ -7,31 +7,54 @@ updates:
     open-pull-requests-limit: 5
   - package-ecosystem: docker
     directory: /core/base
+    ignore:
+      - dependency-name: library/debian
+        versions: [">=14"]
     schedule:
       interval: daily
     open-pull-requests-limit: 3
   - package-ecosystem: docker
     directory: /core/python
+    # Current services require Python 3.12; runtime migrations need a reviewed PR.
+    ignore:
+      - dependency-name: library/python
+        versions: [">=3.13"]
+      - dependency-name: astral-sh/uv
+        versions: [">=0.14"]
     schedule:
       interval: daily
     open-pull-requests-limit: 3
   - package-ecosystem: docker
     directory: /core/node
+    ignore:
+      - dependency-name: library/node
+        versions: [">=27"]
     schedule:
       interval: daily
     open-pull-requests-limit: 3
   - package-ecosystem: docker
     directory: /core/bun
+    ignore:
+      - dependency-name: oven/bun
+        versions: [">=1.5"]
     schedule:
       interval: daily
     open-pull-requests-limit: 3
   - package-ecosystem: docker
     directory: /core/terraform
+    ignore:
+      - dependency-name: hashicorp/terraform
+        versions: [">=1.18"]
+      - dependency-name: library/debian
+        versions: [">=14"]
     schedule:
       interval: daily
     open-pull-requests-limit: 3
   - package-ecosystem: docker
     directory: /core/go
+    ignore:
+      - dependency-name: library/golang
+        versions: [">=1.28"]
     schedule:
       interval: weekly
     open-pull-requests-limit: 2
