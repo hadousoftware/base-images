@@ -40,6 +40,8 @@ ghcr.io/hadousoftware/base-images/terraform:terraform1.17
 The Python 3.12 line is intentional: current Hadou services constrain Python to
 3.12, even though newer Python releases exist. Upgrade and test those services
 before changing the shared runtime line.
+Dependabot keeps Python below 3.13; review migrations alongside service constraints,
+catalog tags, and labels. Digest and supported patch updates remain enabled.
 
 ## Local checks
 
@@ -58,6 +60,13 @@ The smoke test uses a read-only filesystem, no network, no Linux capabilities,
 The scan saves the exact image archive first; HIGH, CRITICAL, UNKNOWN, EOL, and
 scanner-coverage failures block publication. Reports can contain package
 inventory and should be kept private when generated from internal derivatives.
+
+The source scan accepts only LOW `DS-0026` (missing health check) findings for
+the six catalog Dockerfiles and two tool locks listed in `scripts/scan.py`.
+These base and CLI images have no running service. Applications must supply
+their own meaningful health checks. Every accepted finding and its rationale
+is recorded in `gate.json`; raw scan findings remain available. Other
+misconfigurations and all secrets continue to block.
 
 ## Legacy definitions
 
