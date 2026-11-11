@@ -1,4 +1,12 @@
-# Alpine Base image (ABI)
+# Alpine Base image (ABI) — legacy
+
+This definition is retained for history and is not built, scanned, supported,
+or published by the current workflows. Use the maintained Debian 13 catalog in
+the repository root. The historical text below describes the old design and
+must not be treated as current security evidence.
+
+## Historical documentation
+
 Alpine Base image (ABI) is [alpinelinux](https://alpinelinux.org) minirootfs 
 with some [modifications](#Modifications) and latest updates applied.
 

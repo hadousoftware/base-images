@@ -1,43 +1,77 @@
-<center><img src="https://storage.googleapis.com/www.hadou.dev/hadou%20svg%20files/HADOU-02.svg" width="200" height="40"> </center>
+# Hadou base images
 
-<br>
+Maintained, multi-architecture OCI foundations for the runtimes used by Hadou
+services. Images are built for `linux/amd64` and `linux/arm64`, run as
+`10001:10001`, and are published only after restricted-runtime checks and an
+OS-package vulnerability gate pass.
 
-# Base Images
-[![Build & Push Base Images](https://github.com/hadousoftware/base-images/actions/workflows/builder.yaml/badge.svg)](https://github.com/hadousoftware/base-images/actions/workflows/builder.yaml)
-<br>
+This repository follows the container controls used by
+[`hadousoftware/linux-foundry`](https://github.com/hadousoftware/linux-foundry):
+immutable upstream digests, current signed package updates, non-root execution,
+no SSH server or `sudo`, removal of setuid/setgid bits, exact-image scanning,
+CycloneDX SBOM generation, least-privilege GitHub Actions, and gated manual
+publishing. An image passing today is not a guarantee that it is secure or
+uncompromised; downstream applications and their dependencies require their own
+build, runtime, and vulnerability controls.
 
-Welcome to the `hadou.io` base images repo! Providing a collection of secure and versatile Docker base images designed to serve as a secure and reliable foundation.
+## Maintained catalog
 
-## Features 🌟
+| Image | Release line | Purpose | Published |
+| --- | --- | --- | --- |
+| `base` | Debian 13 | Minimal application runtime | yes |
+| `python` | Python 3.12 + uv 0.13 | FastAPI and Python services currently pinned to 3.12 | yes |
+| `node` | Node.js 26 LTS | Astro/Vite builds and Node-compatible tooling | yes |
+| `bun` | Bun 1.4 | Elysia and Bun services | yes |
+| `terraform` | Terraform 1.17 | Infrastructure plans, tests, and controlled applies | yes |
+| `go` | Go 1.27 | Compatibility-only builder; no current Hadou Go modules | no |
 
-- **Security-First Approach:** 🔒 Our base images are built with a strong focus on security. Regular updates and patching to mitigate vulnerabilities, ensuring our internal containers stay on a secure footing.
+The exact build contract is machine-readable in [`images.json`](images.json).
+Use immutable GHCR digests downstream. Version tags are convenience pointers and
+can move after a newly scanned build.
 
-- **Multi-Platform Support:** 🔄 Images are tuned and optimized for multiple CPU architectures, making them compatible with various environments, including ARM64 and AMD64.
+```text
+ghcr.io/hadousoftware/base-images/base:debian13
+ghcr.io/hadousoftware/base-images/python:python3.12
+ghcr.io/hadousoftware/base-images/node:node26
+ghcr.io/hadousoftware/base-images/bun:bun1.4
+ghcr.io/hadousoftware/base-images/terraform:terraform1.17
+```
 
-- **Minimal Footprint:** 📦 Prioritization of minimalism to reduce the attack surface and keep our images lightweight, resulting in faster deployments and efficient resource usage.
+The Python 3.12 line is intentional: current Hadou services constrain Python to
+3.12, even though newer Python releases exist. Upgrade and test those services
+before changing the shared runtime line.
 
-- **Compliance Ready:** 📜 Crafted to meet industry-specific compliance standards, making them suitable for various regulatory environments.
+## Local checks
 
-- **Customization-Friendly:** 🛠️ You can easily customize our base images to suit your application's specific requirements while maintaining the highest security standards.
+Requires Docker, Python 3.10+, `make`, and `jq`. Checks do not start application
+services or access host credentials.
 
-- **Continuous Updates:** 🔄 We are committed to keeping our images up-to-date with the latest security patches and best practices, ensuring that you can build and deploy with confidence.
+```sh
+make test
+make image IMAGE_NAME=python
+make smoke IMAGE_NAME=python
+make scan IMAGE_NAME=python
+```
 
-| Image Name             | Description                                                                                     |
-| ---------------------- | ----------------------------------------------------------------------------------------------- |
-| [hadou.io/base/abi][1] | Base Apline with security patches and compliance in mind. Abstractions and stripped kernel fat. |
-| [hadou.io/python][2]   | Python 3.8 ^ base image with security patches and compliance in mind.                           |
-| [hadou.io/ubuntu][3]   | Ubuntu base image suitable for various applications.                                            |
-| [hadou.io/debian][4]   | Debian base image designed for reliability and compliance.                                      |
-| [hadou.io/golang][5]   | Golang base image optimized for performance and security.                                       |
-| [hadou.io/angular][6]  | Base image for Angular, Node.js, and BUN for web application development.                       |
+The smoke test uses a read-only filesystem, no network, no Linux capabilities,
+`no-new-privileges`, bounded memory/PIDs, and an isolated temporary filesystem.
+The scan saves the exact image archive first; HIGH, CRITICAL, UNKNOWN, EOL, and
+scanner-coverage failures block publication. Reports can contain package
+inventory and should be kept private when generated from internal derivatives.
 
-[1]: hadou.io/base/abi
-[2]: hadou.io/python
-[3]: hadou.io/ubuntu
-[4]: hadou.io/debian
-[5]: hadou.io/golang
-[6]: hadou.io/angular
+## Legacy definitions
 
-## Contributing 🤝
+`base/abi`, `core/packer`, `core/terraform/tfmux`, and `core/zig` are historical and
+are not built, scanned, supported, or published. They remain only to avoid a
+destructive migration without downstream-owner confirmation. Do not use their
+floating tags or download-at-build patterns as examples. Go is retained in the
+CI catalog as an optional compatibility image but is not published.
 
-We welcome contributions, bug reports, and feature requests. If you have suggestions for improving our base images or encounter any issues, please feel free to open an issue or submit a pull request.
+## Publication and ownership
+
+Pull requests and pushes run policy tests and native amd64/arm64 builds. A
+manual workflow on `trunk` reruns validation, publishes the exact scanned OCI
+archives to GHCR, creates multi-platform indexes, and attaches provenance and
+SBOM attestations. The `release` environment should require human approval.
+
+See [SECURITY.md](SECURITY.md) for private reporting and support boundaries.

@@ -1,47 +1,28 @@
-ARG BASE_REGISTRY=registry.access.redhat.com
-ARG BASE_IMAGE=ubi8/ubi-minimal
-ARG BASE_TAG=latest
-ARG NODE_VERSION=lts
-ARG TZ=America/Los_Angeles 
+FROM docker.io/library/node:26-trixie-slim@sha256:5adad64f9a1fca2d51972caa65983634c8a774eb300d72b20f7f2a0f60368072
 
-FROM node:${NODE_VERSION} as base
+LABEL org.opencontainers.image.title="Hadou Node.js base" \
+      org.opencontainers.image.description="Node.js 26 LTS runtime for Astro, Vite, and Node-compatible tooling" \
+      org.opencontainers.image.source="https://github.com/hadousoftware/base-images" \
+      org.opencontainers.image.licenses="Apache-2.0"
 
-FROM ${BASE_REGISTRY}/${BASE_IMAGE}:${BASE_TAG}
+ENV HOME=/home/hadou \
+    NODE_ENV=production
 
-ENV HOME=/home/node \
-    USER=node \
-    TZ=${TZ}
+RUN apt-get -o APT::Update::Error-Mode=any update \
+    && DEBIAN_FRONTEND=noninteractive apt-get --yes --no-remove --with-new-pkgs upgrade \
+    && DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends ca-certificates \
+    && test -z "$(apt-mark showhold)" \
+    && groupadd --gid 10001 hadou \
+    && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin hadou \
+    && passwd --lock root \
+    && mkdir -p /app /usr/share/hadou-base-images \
+    && chown 10001:10001 /app \
+    && dpkg-query -W -f='${binary:Package}\t${Version}\t${Architecture}\n' > /usr/share/hadou-base-images/packages.tsv \
+    && find / -xdev -type f -perm /6000 -exec chmod a-s {} + \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && node --version
 
-# Install system dependencies
-RUN microdnf --disableplugin=subscription-manager install -y --nodocs \
-        shadow-utils \
-        your-additional-dependencies && \
-    groupadd -g 1000 node && \
-    adduser -r -u 1000 -m -s /sbin/nologin -g node node && \
-    chown node:0 ${HOME} && \
-    chmod g=u ${HOME} && \
-    microdnf --disableplugin=subscription-manager update && \
-    microdnf --disableplugin=subscription-manager clean all && \
-    rm -rf /var/cache/yum
-
-
-# Copy necessary files from the base image
-COPY --from=base /usr/local/bin /usr/local/bin
-COPY --from=base /usr/local/include /usr/local/include
-COPY --from=base /usr/local/lib/node_modules /usr/local/lib/node_modules
-COPY --from=base /opt /opt
-COPY scripts/docker-entrypoint.sh /usr/local/bin/docker-entrypoint.sh
-
-# Set the timezone
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
-
-# Working directory and user
-WORKDIR ${HOME}
-USER 1000
-
-HEALTHCHECK --interval=30s --timeout=10s \
-    CMD curl -f http://localhost:8080/health || exit 1
-
-# Entrypoint
-ENTRYPOINT ["docker-entrypoint.sh"]
+WORKDIR /app
+USER 10001:10001
 CMD ["node"]

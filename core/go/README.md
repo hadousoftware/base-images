@@ -1,13 +1,8 @@
-# Golang image
+# Go compatibility image
 
-This is [abi](../abi)-based image with pre-installed and configured golang environment.
+Go is no longer part of the active Hadou application stack. This image remains
+as a tested, non-published builder for downstream compatibility. It uses the
+current supported Go release line on Debian 13, runs as UID/GID 10001, and does
+not include application dependencies.
 
-## What is inside?
-* go
-* git
-* make
-* upx
-* musl-dev
-
-## Versions supported
-Currently, golang `1.18.4` and above are supported. 
+Remove it from `images.json` once all downstream consumers are confirmed gone.

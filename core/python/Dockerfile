@@ -1,33 +1,37 @@
-# Use a minimal base image
-ARG BASE_REGISTRY=registry.access.redhat.com
-ARG BASE_IMAGE=ubi8/ubi-minimal
-ARG BASE_TAG=8.8
-ARG TZ=America/Los_Angeles
+FROM ghcr.io/astral-sh/uv:0.13.7@sha256:96f40d3904aad8d0bd010539001d36c8e2188b981e1334471a90c4a1d93bb490 AS uv
+FROM docker.io/library/python:3.12-slim-trixie@sha256:5e2bdb1b0d542d5039cffb8181c65930093949194a65c365dfb1b0fe13a4fa5b
 
-FROM ${BASE_REGISTRY}/${BASE_IMAGE}:${BASE_TAG}
+LABEL org.opencontainers.image.title="Hadou Python base" \
+      org.opencontainers.image.description="Python 3.12 and uv runtime for Hadou services" \
+      org.opencontainers.image.source="https://github.com/hadousoftware/base-images" \
+      org.opencontainers.image.licenses="Apache-2.0"
 
-ENV HOME=/home/python \
-    USER=python \
-    TZ=${TZ}
+ENV HOME=/home/hadou \
+    PYTHONDONTWRITEBYTECODE=1 \
+    PYTHONUNBUFFERED=1 \
+    UV_COMPILE_BYTECODE=1 \
+    UV_LINK_MODE=copy \
+    UV_PYTHON_DOWNLOADS=never \
+    UV_CACHE_DIR=/home/hadou/.cache/uv
 
-# Install system dependencies and create a non-root user
-RUN microdnf --disableplugin=subscription-manager install -y --nodocs \
-        shadow-utils \
-    && groupadd -g 1000 python \
-    && adduser -r -u 1000 -m -s /sbin/nologin -g python python \
-    && chown python:0 ${HOME} \
-    && chmod g=u ${HOME} \
-    && microdnf --disableplugin=subscription-manager update \
-    && microdnf --disableplugin=subscription-manager clean all \
-    && rm -rf /var/cache/yum
+COPY --from=uv /uv /uvx /usr/local/bin/
 
-# Set the timezone
-RUN ln -snf /usr/share/zoneinfo/$TZ /etc/localtime && echo $TZ > /etc/timezone
+RUN apt-get -o APT::Update::Error-Mode=any update \
+    && DEBIAN_FRONTEND=noninteractive apt-get --yes --no-remove --with-new-pkgs upgrade \
+    && DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends ca-certificates \
+    && test -z "$(apt-mark showhold)" \
+    && groupadd --gid 10001 hadou \
+    && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin hadou \
+    && passwd --lock root \
+    && mkdir -p /app /usr/share/hadou-base-images \
+    && chown 10001:10001 /app \
+    && dpkg-query -W -f='${binary:Package}\t${Version}\t${Architecture}\n' > /usr/share/hadou-base-images/packages.tsv \
+    && find / -xdev -type f -perm /6000 -exec chmod a-s {} + \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && python3 --version \
+    && uv --version
 
-# Healthcheck
-HEALTHCHECK --interval=30s --timeout=10s \
-    CMD /usr/bin/python3 -c "print('Healthy')"
-
-# Entry point
-ENTRYPOINT ["python3"]
-CMD ["--version"]
+WORKDIR /app
+USER 10001:10001
+CMD ["python3"]

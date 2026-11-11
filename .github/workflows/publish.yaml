@@ -1,0 +1,108 @@
+name: Publish base images
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: publish-base-images
+  cancel-in-progress: false
+
+jobs:
+  validate:
+    if: github.ref == 'refs/heads/trunk'
+    uses: ./.github/workflows/builder.yaml
+
+  catalog:
+    if: github.ref == 'refs/heads/trunk'
+    runs-on: ubuntu-24.04
+    timeout-minutes: 5
+    outputs:
+      matrix: ${{ steps.catalog.outputs.matrix }}
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+        with:
+          persist-credentials: false
+      - id: catalog
+        run: echo "matrix=$(python3 scripts/catalog.py matrix --publish-only)" >> "$GITHUB_OUTPUT"
+
+  publish:
+    needs: [validate, catalog]
+    if: github.ref == 'refs/heads/trunk' && github.repository == 'hadousoftware/base-images'
+    strategy:
+      fail-fast: false
+      matrix: ${{ fromJSON(needs.catalog.outputs.matrix) }}
+    runs-on: ubuntu-24.04
+    timeout-minutes: 35
+    environment: release
+    permissions:
+      contents: read
+      packages: write
+      id-token: write
+      attestations: write
+    steps:
+      - uses: actions/download-artifact@9000827ccba6bdab643e8b6fd33ac0654aef8333 # v8.0.2
+        with:
+          pattern: oci-${{ matrix.name }}-*
+          path: artifacts
+      - uses: docker/setup-buildx-action@f87e5991a6d7451dcb8d9637bfbc97413f497069 # v4.4.1
+      - uses: docker/login-action@8aa5831fb8d48d8f76594c7ddde61ae58019f550 # v4.8.0
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - name: Publish exact scanned archives and architecture index
+        id: publish
+        env:
+          REPOSITORY: ${{ github.repository }}
+          NAME: ${{ matrix.name }}
+          COMMIT: ${{ github.sha }}
+          RUN_ID: ${{ github.run_id }}
+          ATTEMPT: ${{ github.run_attempt }}
+        run: |
+          set -euo pipefail
+          image="ghcr.io/${REPOSITORY,,}/$NAME"
+          tag="sha-${COMMIT}-${RUN_ID}-${ATTEMPT}"
+          refs=()
+          for arch in amd64 arm64; do
+            path="artifacts/oci-$NAME-$arch"
+            expected=$(cut -d ' ' -f1 "$path/image.tar.sha256")
+            actual=$(sha256sum "$path/image.tar" | cut -d ' ' -f1)
+            test "$actual" = "$expected"
+            docker load -i "$path/image.tar"
+            test "$(docker inspect --format '{{.Architecture}}' hadou-base-images:test)" = "$arch"
+            docker tag hadou-base-images:test "$image:$tag-$arch"
+            docker push "$image:$tag-$arch"
+            digest=$(docker buildx imagetools inspect "$image:$tag-$arch" --format '{{json .Manifest}}' | jq -r '.digest')
+            [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+            refs+=("$image@$digest")
+          done
+          docker buildx imagetools create --tag "$image:$tag" "${refs[@]}"
+          digest=$(docker buildx imagetools inspect "$image:$tag" --format '{{json .Manifest}}' | jq -r '.digest')
+          [[ "$digest" =~ ^sha256:[0-9a-f]{64}$ ]]
+          {
+            echo "image=$image"
+            echo "digest=$digest"
+          } >> "$GITHUB_OUTPUT"
+      - name: Attest published index provenance
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-name: ${{ steps.publish.outputs.image }}
+          subject-digest: ${{ steps.publish.outputs.digest }}
+          push-to-registry: true
+      - name: Attest scanned archives and SBOM files
+        uses: actions/attest-build-provenance@4d101475d8b20a2381f78447822ac1eab6504dd8 # v4.2.2
+        with:
+          subject-path: |
+            artifacts/oci-${{ matrix.name }}-*/image.tar
+            artifacts/oci-${{ matrix.name }}-*/security/sbom.cdx.json
+      - name: Promote only after attestations succeed
+        env:
+          IMAGE: ${{ steps.publish.outputs.image }}
+          DIGEST: ${{ steps.publish.outputs.digest }}
+          RELEASE_TAG: ${{ matrix.version_tag }}
+        run: |
+          docker buildx imagetools create --tag "$IMAGE:$RELEASE_TAG" "$IMAGE@$DIGEST"
+          echo "Published $IMAGE@$DIGEST" >> "$GITHUB_STEP_SUMMARY"
+          echo 'Use the immutable digest in downstream projects.' >> "$GITHUB_STEP_SUMMARY"

@@ -1,0 +1,11 @@
+{
+  "schema_version": 1,
+  "images": [
+    {"name": "base", "dockerfile": "core/base/Dockerfile", "version_tag": "debian13", "profile": "debian13", "status": "maintained", "publish": true},
+    {"name": "python", "dockerfile": "core/python/Dockerfile", "version_tag": "python3.12", "profile": "debian13", "status": "maintained", "publish": true},
+    {"name": "node", "dockerfile": "core/node/Dockerfile", "version_tag": "node26", "profile": "debian13", "status": "maintained", "publish": true},
+    {"name": "bun", "dockerfile": "core/bun/Dockerfile", "version_tag": "bun1.4", "profile": "debian13", "status": "maintained", "publish": true},
+    {"name": "terraform", "dockerfile": "core/terraform/Dockerfile", "version_tag": "terraform1.17", "profile": "debian13", "status": "maintained", "publish": true},
+    {"name": "go", "dockerfile": "core/go/Dockerfile", "version_tag": "go1.27", "profile": "debian13", "status": "compatibility", "publish": false}
+  ]
+}

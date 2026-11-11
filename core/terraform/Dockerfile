@@ -1,32 +1,33 @@
-ARG BASE_REGISTRY=registry1.dso.mil
-ARG BASE_IMAGE=ironbank/redhat/ubi/ubi8
-ARG BASE_TAG=8.8
-ARG TZ=America/Los_Angeles 
+FROM docker.io/hashicorp/terraform:1.17.1@sha256:a5d5a5a892c98f60fcbfa81eac2a40fc19e7b3fa7719bccae10ff6111d22524a AS terraform
+FROM docker.io/library/debian:13-slim@sha256:a72b4433de1cf7d6bae0c4cee74d0547f58601a643b3375f070c51600d63b6b2
 
-FROM ${BASE_REGISTRY}/${BASE_IMAGE}:${BASE_TAG}
+LABEL org.opencontainers.image.title="Hadou Terraform base" \
+      org.opencontainers.image.description="Terraform 1.17 CLI for Hadou infrastructure workflows" \
+      org.opencontainers.image.source="https://github.com/hadousoftware/base-images" \
+      org.opencontainers.image.licenses="Apache-2.0"
 
-COPY terraform.zip /tmp
+ENV HOME=/home/hadou \
+    TF_IN_AUTOMATION=1 \
+    TF_PLUGIN_CACHE_DIR=/home/hadou/.terraform.d/plugin-cache
 
-RUN dnf install -y unzip openssh bash git git-lfs \
-    && dnf upgrade -y \
-    && dnf clean all \
-    && rm -rf /var/cache/dnf \
-    && unzip -d /bin /tmp/terraform.zip \
-    && chmod +x /bin/terraform \
-    && rm /tmp/terraform.zip
+COPY --from=terraform /bin/terraform /usr/local/bin/terraform
 
-RUN groupadd -g 1001 terraform \
-    && useradd -r -u 1001 -m -s /sbin/nologin -g terraform terraform \
-    && chmod g-s /usr/libexec/openssh/ssh-keysign \
-    && chown -R terraform:terraform /etc/pki/ca-trust \
-    && chmod -R 775 /etc/pki/ca-trust \
-    && rm -f /usr/share/doc/perl-IO-Socket-SSL/example/simulate_proxy.pl \
-    && find /usr/share/doc/perl-IO-Socket-SSL/certs -name "*.enc" -o -name "*.pem" | xargs rm -f \
-    && find /usr/share/doc/perl-Net-SSLeay/examples -name "*.pem" | xargs rm -f
+RUN apt-get -o APT::Update::Error-Mode=any update \
+    && DEBIAN_FRONTEND=noninteractive apt-get --yes --no-remove --with-new-pkgs upgrade \
+    && DEBIAN_FRONTEND=noninteractive apt-get install --yes --no-install-recommends ca-certificates git openssh-client \
+    && test -z "$(apt-mark showhold)" \
+    && groupadd --gid 10001 hadou \
+    && useradd --uid 10001 --gid 10001 --create-home --shell /usr/sbin/nologin hadou \
+    && passwd --lock root \
+    && mkdir -p /workspace /home/hadou/.terraform.d/plugin-cache /usr/share/hadou-base-images \
+    && chown -R 10001:10001 /workspace /home/hadou \
+    && dpkg-query -W -f='${binary:Package}\t${Version}\t${Architecture}\n' > /usr/share/hadou-base-images/packages.tsv \
+    && find / -xdev -type f -perm /6000 -exec chmod a-s {} + \
+    && apt-get clean \
+    && rm -rf /var/lib/apt/lists/* \
+    && terraform version
 
-USER terraform
-
-HEALTHCHECK --interval=30s --timeout=10s \
-    CMD /usr/bin/curl -f http://localhost:8080/health || exit 1
-
-ENTRYPOINT ["/bin/terraform"]
+WORKDIR /workspace
+USER 10001:10001
+ENTRYPOINT []
+CMD ["terraform", "version"]
